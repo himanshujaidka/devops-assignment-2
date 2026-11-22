@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ACEest Fitness</title>
+    <style>
+      body { max-width: 760px; margin: 3rem auto; padding: 0 1rem; font: 16px system-ui, sans-serif; color: #20242a; }
+      h1 { color: #176b58; }
+      form { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.5rem 0; }
+      input, select, button { padding: .65rem; font: inherit; }
+      li { margin: .5rem 0; }
+      #message { min-height: 1.5em; color: #a12622; }
+    </style>
+  </head>
+  <body>
+    <h1>ACEest Fitness &amp; Gym</h1>
+    <p>Manage clients and explore fitness programs.</p>
+    <h2>Programs</h2>
+    <ul id="programs"></ul>
+    <h2>Add a client</h2>
+    <form id="client-form">
+      <input name="name" placeholder="Client name" required>
+      <input name="age" type="number" min="1" max="120" placeholder="Age">
+      <select name="program" aria-label="Program">
+        <option value="">Choose a program</option>
+      </select>
+      <button type="submit">Save client</button>
+    </form>
+    <p id="message" role="status"></p>
+    <h2>Clients</h2>
+    <ul id="clients"></ul>
+    <script>
+      const message = document.querySelector("#message");
+      async function loadData() {
+        const [programResponse, clientResponse] = await Promise.all([
+          fetch("/api/programs"), fetch("/api/clients")
+        ]);
+        const programs = await programResponse.json();
+        const clients = await clientResponse.json();
+        document.querySelector("#programs").innerHTML = "";
+        document.querySelector("#client-form select").innerHTML =
+          '<option value="">Choose a program</option>';
+        for (const [name, details] of Object.entries(programs)) {
+          const item = document.createElement("li");
+          item.textContent = `${name}: ${details.workout}`;
+          document.querySelector("#programs").append(item);
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          document.querySelector("#client-form select").append(option);
+        }
+        document.querySelector("#clients").innerHTML = "";
+        for (const client of clients) {
+          const item = document.createElement("li");
+          item.textContent = `${client.name} — ${client.program || "No program assigned"}`;
+          document.querySelector("#clients").append(item);
+        }
+      }
+      document.querySelector("#client-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement);
+        const age = form.get("age");
+        try {
+          const response = await fetch("/api/clients", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: form.get("name"),
+              age: age ? Number(age) : null,
+              program: form.get("program") || null
+            })
+          });
+          const result = await response.json();
+          message.textContent = response.ok ? "Client saved." : result.error;
+          if (response.ok) {
+            formElement.reset();
+            await loadData();
+          }
+        } catch {
+          message.textContent = "Unable to save the client. Check the connection and try again.";
+        }
+      });
+      loadData().catch(() => { message.textContent = "Unable to load application data."; });
+    </script>
+  </body>
+</html>

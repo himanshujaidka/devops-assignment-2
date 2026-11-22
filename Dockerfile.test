@@ -1,0 +1,10 @@
+FROM python:3.12-slim
+
+WORKDIR /workspace
+COPY requirements-dev.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY ACEest_Fitness.py .
+COPY tests ./tests
+COPY templates ./templates
+
+CMD ["python", "-m", "pytest", "-q", "--junitxml=/test-results/junit.xml"]
