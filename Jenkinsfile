@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    options {
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
     environment {
         IMAGE_NAME = 'YOUR_DOCKERHUB_USER/aceest-fitness'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
@@ -93,7 +101,12 @@ pipeline {
                 sh '''
                     kubectl set image deployment/aceest \
                       aceest="$IMAGE_NAME:$IMAGE_TAG"
-                    kubectl rollout status deployment/aceest --timeout=120s
+                    if ! kubectl rollout status deployment/aceest --timeout=120s; then
+                        echo "Deployment failed; rolling back to the previous revision."
+                        kubectl rollout undo deployment/aceest
+                        kubectl rollout status deployment/aceest --timeout=120s
+                        exit 1
+                    fi
                 '''
             }
         }

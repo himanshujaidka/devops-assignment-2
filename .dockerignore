@@ -4,7 +4,6 @@ __pycache__
 *.py[cod]
 .venv
 instance
-tests
 versions
 README.md
 REPORT.md

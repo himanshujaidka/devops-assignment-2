@@ -10,7 +10,7 @@ Requires Python 3.12 or newer.
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
-pytest
+python -m pytest
 python ACEest_Fitness.py
 ```
 
@@ -23,7 +23,18 @@ docker build -t aceest-fitness:local .
 docker run --rm -p 5000:5000 aceest-fitness:local
 ```
 
-Before publishing, replace `YOUR_DOCKERHUB_USER` in `Jenkinsfile` and the Kubernetes image references with the Docker Hub account used for submission. Set Jenkins credentials with ID `dockerhub-creds` (Docker Hub username and access token), configure the SonarQube installation as `SonarQube`, install the SonarScanner CLI and Kubernetes CLI on the Jenkins agent, and configure its Kubernetes context. The pipeline tests every branch; publishing and rolling deployment run on `main`.
+The image build needs HTTPS access to PyPI with a trusted certificate. If your network uses an inspection proxy, configure the build environment to trust its approved CA; do not disable certificate validation.
+
+## Set up the Jenkins pipeline
+
+1. Push this local Git repository and its tags to your own GitHub repository after checking that you are allowed to publish the historical source files. Share the public repository URL, or invite the reviewer if private access is permitted.
+2. Set up a Linux Jenkins agent with Python 3, Docker, `kubectl`, and `sonar-scanner`. Use a multibranch Pipeline job pointing at the repository; the `branch 'main'` conditions require multibranch branch metadata. Jenkins polls for changes every five minutes; a GitHub webhook can also trigger builds.
+3. Configure the SonarQube Jenkins plugin and an installation named `SonarQube`. Add the SonarQube webhook `https://<jenkins-url>/sonarqube-webhook/`, including the trailing slash, so `waitForQualityGate` can receive the result. Set a quality gate in SonarQube.
+4. Create Jenkins username/password credentials with ID `dockerhub-creds` using your Docker Hub username and access token. Replace `YOUR_DOCKERHUB_USER` in the Jenkinsfile and Kubernetes manifests with that username. The account and image must be accessible to your cluster.
+5. Configure the Jenkins agent to access the intended assignment cluster. Build and push an initial image, update `k8s/base/deployment.yaml` to use that real tag, and apply the base manifests before running the deployment stage. Do not use a workplace cluster without authorization.
+6. Run a build on `main`. Jenkins runs tests both locally and inside the test container, scans the code, waits for the quality gate, builds and pushes an image tagged with the build number, then deploys it. A failed rollout triggers an automatic rollback and fails the build. Keep the successful build URL, test results, image tag, and SonarQube results for your submission.
+
+The pipeline uses Linux shell steps; a Windows-only Jenkins agent needs equivalent adaptations. For Jenkins to receive GitHub or SonarQube webhooks, its webhook endpoints must be reachable by those services.
 
 ## Kubernetes deployment
 
@@ -34,23 +45,37 @@ kubectl apply -f k8s/base
 kubectl rollout status deployment/aceest
 ```
 
-For Minikube, enable the ingress add-on and map `aceest.local` to the Minikube IP in the local hosts file. A successful local endpoint is then `http://aceest.local`.
+For Minikube, enable the ingress add-on and map `aceest.local` to the Minikube IP in the local hosts file. `http://aceest.local` is only a local demonstration address, not a publicly accessible submission endpoint. Use a cluster and DNS/Ingress address reachable by the reviewer if the assignment requires a remote endpoint.
+
+The SQLite database is stored in each container's writable layer. It is lost when that container is replaced, and pods do not share their records; rolling, blue-green, canary, A/B and shadow routes can therefore show different or missing clients. Use sample data only. Reliable shared state and a truly zero-downtime stateful rollout require an external shared database and suitable authentication, neither of which is included.
 
 ### Release strategies
 
-Examples are in `k8s/strategies`; they are selectable demonstrations, not applied together:
+Examples are in `k8s/strategies`; they are selectable demonstrations, not applied together. Replace `stable` and `candidate` image references with image tags that actually exist in your Docker Hub repository before applying them.
 
 * **Rolling update:** `k8s/base/deployment.yaml` sets `maxUnavailable: 0` and `maxSurge: 1`. Roll back with `kubectl rollout undo deployment/aceest`.
-* **Blue-green:** apply the base Ingress and `blue-green.yaml` (use its `aceest` Service instead of the base Service), wait until both Deployments are ready, test green with `kubectl port-forward service/aceest 8080:80`, then switch the Service selector with `kubectl patch service aceest -p '{"spec":{"selector":{"app":"aceest","track":"green"}}}'`. Roll back by changing `green` to `blue`.
-* **Canary:** apply the canary Deployment and Service and then `canary-ingress.yaml`. NGINX Ingress sends 10% of eligible traffic to the candidate; adjust `nginx.ingress.kubernetes.io/canary-weight` as rollout evidence permits.
-* **A/B test:** apply the canary Deployment and Service and `ab-test-ingress.yaml`. Requests with `X-ACEest-Variant: B` route to the candidate; other requests stay on the stable Ingress.
-* **Shadow:** apply the shadow Deployment and Service, then apply `shadow-ingress-patch.yaml` in place of the base Ingress. NGINX Ingress mirrors requests to the shadow backend while returning the stable response. Do not use mirrored requests for endpoints with side effects.
+* **Blue-green:** apply the base Ingress and `blue-green.yaml` (use its `aceest` Service instead of the base Service), then wait until both Deployments are ready. Test green directly with `kubectl port-forward deployment/aceest-green 8080:5000` and visit `http://localhost:8080/health`. Switch traffic using `kubectl set selector service/aceest app=aceest,track=green`; roll back with `kubectl set selector service/aceest app=aceest,track=blue`.
+* **Canary:** apply the canary Deployment and Service and then `canary-ingress.yaml`. NGINX Ingress sends 10% of eligible traffic to the candidate; adjust `nginx.ingress.kubernetes.io/canary-weight` as rollout evidence permits. Remove the canary Ingress to send traffic back to stable.
+* **A/B test:** apply the canary Deployment and Service and `ab-test-ingress.yaml`. Requests with `X-ACEest-Variant: B` route to the candidate; other requests stay on the stable Ingress. Remove the A/B Ingress to send all traffic back to stable.
+* **Shadow:** apply the shadow Deployment and Service, then apply `shadow-ingress-patch.yaml` in place of the base Ingress. NGINX Ingress mirrors requests to the shadow backend while returning the stable response. The example assumes the `default` namespace. Only demonstrate this with safe read-only requests such as `/health`: mirroring POSTs executes them on the shadow backend too. Reapply the base Ingress to remove the mirror annotations.
 
 Canary, A/B, and shadow examples require the community NGINX Ingress controller and the stable base Ingress. The strategies are alternatives and share resource names/host; apply only the strategy being demonstrated. Kubernetes rollback and delivery are dependent on a cluster, Ingress controller, registry image, and configured credentials.
 
 ## CI/CD architecture
 
-GitHub is the source repository and Jenkins is triggered by repository webhooks. Jenkins creates a Python virtual environment, compiles the application, runs pytest and publishes JUnit results. On `main`, SonarScanner submits static analysis to SonarQube, Docker builds and pushes a build-number-tagged image, and `kubectl` updates the rolling Deployment and waits for readiness. Kubernetes readiness/liveness probes expose unhealthy rollouts, and `kubectl rollout undo` provides rollback.
+GitHub is the source repository and Jenkins polls it for changes. Jenkins creates a Python virtual environment, compiles the application, runs pytest on the agent and in a container, and publishes JUnit results. On `main`, SonarScanner submits static analysis to SonarQube and waits for the quality gate, Docker builds and pushes a build-number-tagged image, and `kubectl` updates the rolling Deployment. A failed rollout triggers `kubectl rollout undo` and fails the build.
+
+## Submission evidence
+
+The checked-in configuration is not evidence that external services ran. After completing the setup, collect:
+
+* The accessible GitHub repository URL and commits/tags.
+* A recent successful Jenkins build URL and test results.
+* Your Docker Hub repository URL and the image tags actually built and pushed. The historical Tkinter files are archived source snapshots, **not** prebuilt Flask images.
+* A SonarQube dashboard URL or exported/printed report showing the project, analysis date, issues and quality-gate status.
+* A reviewer-reachable cluster endpoint and evidence of each deployment strategy and rollback. Record which image tags were used.
+
+Do not fabricate links, screenshots, analysis results, image versions or live endpoints.
 
 ## Assignment report
 

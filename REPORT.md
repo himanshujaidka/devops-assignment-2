@@ -1,27 +1,47 @@
-# ACEest Fitness CI/CD Assignment Report
+# ACEest Fitness: CI/CD Project Report
 
-## 1. CI/CD architecture overview
+## Project overview
 
-ACEest Fitness is delivered as a Flask web service with a lightweight browser interface. A fitness coach can review the Fat Loss, Muscle Gain, and Beginner program templates and register a client with an optional age and program. The JSON endpoints provide a health check, program catalog, and client create/list operations. Client data is held in SQLite for this single-instance assignment demonstration. Parameterized SQL protects database operations from query injection, input validation gives clear client errors, and a unique name constraint prevents accidental duplicate records.
+ACEest Fitness needed a repeatable way to test and deliver changes to its fitness management application. This project provides a small Flask application and the configuration for a Jenkins-based delivery pipeline. The application allows a user to view fitness programs and add clients with an optional age and program. Client records are stored in SQLite, and the application exposes a health endpoint for deployment checks.
 
-The pipeline begins when a change is pushed to the GitHub repository and a webhook triggers Jenkins. On every branch, Jenkins installs the declared Python dependencies, compiles the application and tests, executes pytest, and publishes the JUnit test report. For `main`, SonarScanner submits the configured source and test paths to SonarQube. Jenkins then builds a Docker image tagged with the Jenkins build number, authenticates to Docker Hub using a Jenkins credential, publishes the image, and updates the Kubernetes Deployment. The final rollout-status check makes deployment success visible to Jenkins instead of treating an image push as a successful release.
+The original files supplied for the assignment are Tkinter desktop applications. They are preserved in the `versions` directory rather than overwritten. The Flask application is a separate, smaller web implementation; it does not claim to reproduce every feature of the desktop versions.
 
-The Kubernetes rolling-update Deployment uses readiness and liveness probes on `/health`, resource requests/limits, and a zero-unavailable rolling policy. Kubernetes retains rollout history, allowing an operator to run `kubectl rollout undo deployment/aceest` if the new version is unhealthy. Separate manifests demonstrate blue-green service-selector switching, weighted canary routing, header-based A/B selection, and NGINX Ingress request mirroring for shadow validation. These are alternative strategies; only the chosen strategy should be enabled for a given test.
+## CI/CD architecture
 
-## 2. Challenges faced and mitigation strategies
+The intended flow is:
 
-The provided application versions are desktop programs built with Tkinter, while the assignment explicitly asks for a Flask web application. Replacing the supplied files would lose the earlier assignment work and its version history. The mitigation is a separate `ACEest-DevOps-CICD` project that implements the web-app and pipeline deliverables while leaving all provided versions intact; copies are included under `versions/` as historical references.
+**GitHub → Jenkins → pytest → SonarQube → Docker Hub → Kubernetes**
 
-A second challenge is making tests independent from a developer's local data. The Flask application factory accepts a test database path, and the pytest fixture creates a fresh temporary SQLite database for each test. This allows endpoint behavior and validation to be tested repeatably without opening the GUI or relying on a pre-existing database. Current tests cover page and health responses, program availability, client creation/listing, invalid input, and duplicate clients.
+Jenkins checks the repository for changes every five minutes. It installs the Python dependencies, checks that the code compiles and runs the pytest suite. It also builds a separate test image and executes the same suite inside a container. Jenkins publishes the test results so a failed test can be investigated before a release goes any further.
 
-The delivery pipeline also depends on infrastructure not contained in source code: a GitHub repository and webhook, Jenkins plugins and configured tools, Docker Hub credentials, a SonarQube server/quality gate, and a Kubernetes cluster. These dependencies are configured by named Jenkins installations/credentials and image placeholders rather than committing credentials. The Kubernetes progressive-delivery manifests use NGINX Ingress annotations, so the controller must be installed before those traffic strategies can operate. The report does not claim that remote builds, registry publication, Sonar analysis, or a live endpoint exist until they have been run using the submitter's accounts and cluster.
+For the `main` branch, the pipeline sends the source to SonarQube and waits for the configured quality gate. If that passes, Jenkins builds the runtime image, tags it with the build number and pushes it to Docker Hub. The last stage updates the Kubernetes Deployment and waits for it to become ready. If the rollout fails, the pipeline attempts to restore the previous Deployment revision and marks the build as failed. Credentials are expected to be stored in Jenkins, not in the repository.
 
-Finally, SQLite is simple to run locally and inside the image, but it is not suitable as a shared writable database for horizontally scaled replicas. The sample deployment therefore uses one replica. A production version should migrate to a managed database, use managed secrets, and add backups before increasing replica count.
+The Kubernetes manifests include a rolling update with readiness and liveness probes. Separate examples show blue-green switching, a weighted canary, header-based A/B routing and shadow traffic using the community NGINX Ingress controller. The README explains how to select and roll back the examples. These manifests are starting points for a demonstration, not proof that the strategies have been exercised in a live cluster.
 
-## 3. Key automation outcomes and evidence
+## Challenges and decisions
 
-The project contains `ACEest_Fitness.py`, a Flask browser application and SQLite-backed client API, the supplied historical source versions under `versions/`, health checks, nine pytest cases, a Jenkinsfile with host and containerized test stages and a SonarQube quality gate, Dockerfiles for test and runtime images, SonarQube project properties, and Kubernetes deployment/service/ingress manifests. The deployment folder includes examples for each of the five requested release patterns: rolling, blue-green, canary, shadow, and A/B testing. README instructions describe local startup and the external services and placeholders that must be configured.
+The main design decision was how to use the supplied desktop code while meeting the requirement for Flask. Instead of changing the old versions, the project keeps them as historical snapshots and implements a focused web application. This makes the code used by the pipeline clear, while retaining the original assignment material.
 
-Local test execution in the prepared project completed successfully: **9 tests passed**. Python compilation also completed without errors. A Docker image build was attempted but could not download dependencies because certificate verification failed while pip connected to the package index from the build container. The standard Dockerfile was not changed to bypass TLS verification; rerun the build from an environment with a trusted package-index certificate. Minikube is not installed, and the selected Kubernetes API endpoint was unreachable, so Kubernetes manifests could not be validated against a live cluster and no deployment was performed. No Jenkins, SonarQube, Docker Hub, or GitHub remote was configured as part of this local work.
+Tests need to be repeatable and should not change a user's existing data. The Flask application accepts a database path through its configuration; the pytest fixture creates a temporary database for each test. The tests cover the home page and health endpoint, the program list, client creation and retrieval, and invalid or duplicate input. The Docker test image uses the same test suite as the host.
 
-Before final submission, configure and run the remote workflow, then add the actual public GitHub repository URL, Docker Hub repository/tag, SonarQube quality-gate result, Jenkins build evidence, and reachable cluster endpoint to the submission. Do not submit a placeholder URL or describe an unexecuted deployment as live.
+The infrastructure is another practical challenge. A working demonstration depends on accounts, credentials and services outside the project: GitHub, Jenkins, SonarQube, Docker Hub and Kubernetes. The repository contains their configuration, but these services still need to be connected and run by the project owner. In particular, SonarQube needs a webhook back to Jenkins so the quality-gate stage can finish, and the initial Kubernetes Deployment must exist before Jenkins can update its image.
+
+The local Docker build was blocked when pip could not verify the package-index certificate from inside the build container. Certificate validation was not disabled. The appropriate remedy is to configure the approved certificate authority for the build environment and retry. The configured Kubernetes API was unreachable, and Minikube was not installed, so a cluster deployment was not attempted.
+
+SQLite is convenient for a small local example but creates a limitation in Kubernetes. Each container has its own writable layer: data can disappear on replacement, and different pods can return different records during a rollout. The examples should therefore use sample data only. A shared database, authentication and persistent storage would be needed before treating this as a reliable multi-user service or claiming a zero-downtime stateful deployment.
+
+## Outcomes and submission evidence
+
+The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. The Docker test context was corrected so the test files are available to the test-image build, but that image still needs a successful build in an environment with trusted package-index certificates.
+
+The following evidence must be added after the external services are configured and exercised:
+
+| Requirement | Evidence to provide |
+|---|---|
+| GitHub | Accessible repository URL and relevant commits/tags |
+| Jenkins | Successful recent build URL and test results |
+| SonarQube | Actual analysis report or dashboard URL, including quality-gate status |
+| Docker Hub | Owned repository URL and the image tags actually built and pushed |
+| Kubernetes | Reviewer-reachable endpoint and evidence for each requested strategy and rollback |
+
+No remote build, SonarQube report, published image or running cluster endpoint is claimed in this report until it is actually available. The historical Tkinter files are source snapshots, not container images for every application version.
