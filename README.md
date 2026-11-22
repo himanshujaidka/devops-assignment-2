@@ -1,6 +1,6 @@
 # ACEest Fitness - DevOps CI/CD Assignment
 
-This submission provides a Flask-based fitness-client application, pytest suite, Jenkins pipeline, Docker image definition, SonarQube configuration, and Kubernetes examples. The Tkinter source versions supplied with the assignment are left unchanged.
+This submission provides a Flask-based fitness-client application, pytest suite, Jenkins pipeline, Docker image definition, SonarQube configuration, and Kubernetes examples. The supplied Tkinter source files are archived unchanged under `versions/`; they are not imported into or packaged with the Flask runtime.
 
 ## Run locally
 
