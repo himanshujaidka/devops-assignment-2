@@ -1,5 +1,11 @@
 # ACEest Fitness: CI/CD Project Report
 
+**Name:** Himanshu
+
+**Student ID:** 2025tm93219
+
+**Assignment:** Introduction to DevOps, Assignment 2
+
 ## Project overview
 
 ACEest Fitness needed a repeatable way to test and deliver changes to its fitness management application. This project provides a small Flask application and the configuration for a Jenkins-based delivery pipeline. The application allows a user to view fitness programs and add clients with an optional age and program. Client records are stored in SQLite, and the application exposes a health endpoint for deployment checks.
