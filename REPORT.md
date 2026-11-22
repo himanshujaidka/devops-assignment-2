@@ -26,13 +26,13 @@ Tests need to be repeatable and should not change a user's existing data. The Fl
 
 The infrastructure is another practical challenge. A working demonstration depends on accounts, credentials and services outside the project: GitHub, Jenkins, SonarQube, Docker Hub and Kubernetes. The repository contains their configuration, but these services still need to be connected and run by the project owner. In particular, SonarQube needs a webhook back to Jenkins so the quality-gate stage can finish, and the initial Kubernetes Deployment must exist before Jenkins can update its image.
 
-The local Docker build was blocked when pip could not verify the package-index certificate from inside the build container. Certificate validation was not disabled. The appropriate remedy is to configure the approved certificate authority for the build environment and retry. The configured Kubernetes API was unreachable, and Minikube was not installed, so a cluster deployment was not attempted.
+The local Docker build was initially blocked when pip could not verify the package-index certificate from inside the build container. The Windows host could download packages using its trusted certificate store, so the build was retried with a temporary bundle of public Windows CA certificates passed through a Docker BuildKit secret. Both images then built successfully without disabling certificate validation or copying the bundle into an image. The configured Kubernetes API was unreachable, and Docker Desktop Kubernetes was still disabled, so a cluster deployment was not attempted.
 
 SQLite is convenient for a small local example but creates a limitation in Kubernetes. Each container has its own writable layer: data can disappear on replacement, and different pods can return different records during a rollout. The examples should therefore use sample data only. A shared database, authentication and persistent storage would be needed before treating this as a reliable multi-user service or claiming a zero-downtime stateful deployment.
 
 ## Outcomes and submission evidence
 
-The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. The Docker test context was corrected so the test files are available to the test-image build, but that image still needs a successful build in an environment with trusted package-index certificates.
+The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. Both Docker images built using the trusted CA bundle; the test suite also passed inside the test image, and the runtime container responded to HTTP health and program requests. These local results do not replace the required Jenkins or cluster evidence.
 
 The following evidence must be added after the external services are configured and exercised:
 

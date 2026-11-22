@@ -7,3 +7,4 @@ instance/
 .env
 *.sqlite
 *.db
+ca-bundle.pem

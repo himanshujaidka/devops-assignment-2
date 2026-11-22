@@ -6,7 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
+RUN --mount=type=secret,id=pip_ca \
+    if [ -f /run/secrets/pip_ca ]; then export PIP_CERT=/run/secrets/pip_ca; fi \
+    && pip install --no-cache-dir -r requirements.txt \
     && adduser --disabled-password --gecos "" appuser \
     && mkdir -p /app/instance \
     && chown -R appuser:appuser /app

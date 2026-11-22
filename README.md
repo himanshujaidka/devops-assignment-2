@@ -23,14 +23,24 @@ docker build -t aceest-fitness:local .
 docker run --rm -p 5000:5000 aceest-fitness:local
 ```
 
-The image build needs HTTPS access to PyPI with a trusted certificate. If your network uses an inspection proxy, configure the build environment to trust its approved CA; do not disable certificate validation.
+The image build needs HTTPS access to PyPI with a trusted certificate. If a Windows machine trusts an approved inspection proxy but the build container reports `CERTIFICATE_VERIFY_FAILED`, export its public CA certificates to a temporary file and pass that file as a BuildKit secret:
+
+```powershell
+.\scripts\Export-WindowsCaBundle.ps1 -OutputPath "$env:TEMP\aceest-ca-bundle.pem"
+docker build --secret "id=pip_ca,src=$env:TEMP\aceest-ca-bundle.pem" -t aceest-fitness:local .
+docker build --secret "id=pip_ca,src=$env:TEMP\aceest-ca-bundle.pem" -f Dockerfile.test -t aceest-fitness:test .
+docker run --rm aceest-fitness:test python -m pytest -q
+Remove-Item -LiteralPath "$env:TEMP\aceest-ca-bundle.pem"
+```
+
+The script exports public certificates, not private keys, from Windows Root and Intermediate Certification Authorities stores. The build uses the bundle only for the dependency installation step; it is not copied into the image. Use only a certificate store approved by your organization, do not commit the bundle, and do not disable certificate verification. On a network that does not require the additional CA, use the normal `docker build` command above.
 
 ## Set up the Jenkins pipeline
 
 1. Push this local Git repository and its tags to your own GitHub repository after checking that you are allowed to publish the historical source files. Share the public repository URL, or invite the reviewer if private access is permitted.
 2. Set up a Linux Jenkins agent with Python 3, Docker, `kubectl`, and `sonar-scanner`. Use a multibranch Pipeline job pointing at the repository; the `branch 'main'` conditions require multibranch branch metadata. Jenkins polls for changes every five minutes; a GitHub webhook can also trigger builds.
 3. Configure the SonarQube Jenkins plugin and an installation named `SonarQube`. Add the SonarQube webhook `https://<jenkins-url>/sonarqube-webhook/`, including the trailing slash, so `waitForQualityGate` can receive the result. Set a quality gate in SonarQube.
-4. Create Jenkins username/password credentials with ID `dockerhub-creds` using your Docker Hub username and access token. Replace `YOUR_DOCKERHUB_USER` in the Jenkinsfile and Kubernetes manifests with that username. The account and image must be accessible to your cluster.
+4. Create Jenkins username/password credentials with ID `dockerhub-creds` using your Docker Hub username and access token. Replace `YOUR_DOCKERHUB_USER` in the Jenkinsfile and Kubernetes manifests with that username. The account and image must be accessible to your cluster. If the Linux agent also needs a custom CA bundle, place an approved PEM bundle on that agent and set the agent environment variable `PIP_CA_CERT` to its absolute path. Jenkins passes it as a build secret to both images and uses it for host-side pip; the agent needs Docker BuildKit.
 5. Configure the Jenkins agent to access the intended assignment cluster. Build and push an initial image, update `k8s/base/deployment.yaml` to use that real tag, and apply the base manifests before running the deployment stage. Do not use a workplace cluster without authorization.
 6. Run a build on `main`. Jenkins runs tests both locally and inside the test container, scans the code, waits for the quality gate, builds and pushes an image tagged with the build number, then deploys it. A failed rollout triggers an automatic rollback and fails the build. Keep the successful build URL, test results, image tag, and SonarQube results for your submission.
 

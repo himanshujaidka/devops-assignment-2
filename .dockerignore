@@ -1,9 +1,12 @@
 .git
 .pytest_cache
 __pycache__
+**/__pycache__
 *.py[cod]
+**/*.py[cod]
 .venv
 instance
+ca-bundle.pem
 versions
 README.md
 REPORT.md

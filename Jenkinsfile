@@ -20,6 +20,10 @@ pipeline {
                 sh '''
                     python3 -m venv .venv
                     . .venv/bin/activate
+                    if [ -n "${PIP_CA_CERT:-}" ]; then
+                        test -r "$PIP_CA_CERT"
+                        export PIP_CERT="$PIP_CA_CERT"
+                    fi
                     pip install --upgrade pip
                     pip install -r requirements-dev.txt
                     python -m compileall -q ACEest_Fitness.py tests
@@ -37,7 +41,12 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p test-results
-                    docker build -f Dockerfile.test -t aceest-fitness:test .
+                    set --
+                    if [ -n "${PIP_CA_CERT:-}" ]; then
+                        test -r "$PIP_CA_CERT"
+                        set -- --secret "id=pip_ca,src=$PIP_CA_CERT"
+                    fi
+                    docker build "$@" -f Dockerfile.test -t aceest-fitness:test .
                     docker run --rm \
                       -v "$WORKSPACE/test-results:/test-results" \
                       aceest-fitness:test
@@ -85,7 +94,12 @@ pipeline {
                     sh '''
                         echo "$DOCKERHUB_TOKEN" | docker login \
                           --username "$DOCKERHUB_USER" --password-stdin
-                        docker build -t "$IMAGE_NAME:$IMAGE_TAG" .
+                        set --
+                        if [ -n "${PIP_CA_CERT:-}" ]; then
+                            test -r "$PIP_CA_CERT"
+                            set -- --secret "id=pip_ca,src=$PIP_CA_CERT"
+                        fi
+                        docker build "$@" -t "$IMAGE_NAME:$IMAGE_TAG" .
                         docker push "$IMAGE_NAME:$IMAGE_TAG"
                         docker logout
                     '''
