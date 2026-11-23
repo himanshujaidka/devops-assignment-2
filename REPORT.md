@@ -22,7 +22,7 @@ Jenkins checks the repository for changes every five minutes. It installs the Py
 
 For the `main` branch, the pipeline sends the source to SonarQube and waits for the configured quality gate. If that passes, Jenkins builds the runtime image, tags it with the build number and pushes it to Docker Hub. The last stage updates the Kubernetes Deployment and waits for it to become ready. If the rollout fails, the pipeline attempts to restore the previous Deployment revision and marks the build as failed. Credentials are expected to be stored in Jenkins, not in the repository.
 
-The Kubernetes manifests include a rolling update with readiness and liveness probes. Separate examples show blue-green switching, a weighted canary, header-based A/B routing and shadow traffic using the community NGINX Ingress controller. The README explains how to select and roll back the examples. These manifests are starting points for a demonstration, not proof that the strategies have been exercised in a live cluster.
+The Kubernetes manifests include a rolling update with readiness and liveness probes. Separate examples show blue-green switching, a weighted canary, header-based A/B routing and shadow traffic using the community NGINX Ingress controller. The README explains how to select and roll back the examples. The strategies were exercised locally, as described below, but these examples are not a production deployment.
 
 ## Challenges and decisions
 
@@ -30,7 +30,7 @@ The main design decision was how to use the supplied desktop code while meeting 
 
 Tests need to be repeatable and should not change a user's existing data. The Flask application accepts a database path through its configuration; the pytest fixture creates a temporary database for each test. The tests cover the home page and health endpoint, the program list, client creation and retrieval, and invalid or duplicate input. The Docker test image uses the same test suite as the host.
 
-The infrastructure is another practical challenge. A working demonstration depends on accounts, credentials and services outside the project: GitHub, Jenkins, SonarQube, Docker Hub and Kubernetes. The repository contains their configuration, but these services still need to be connected and run by the project owner. In particular, SonarQube needs a webhook back to Jenkins so the quality-gate stage can finish, and the initial Kubernetes Deployment must exist before Jenkins can update its image.
+The infrastructure is another practical challenge. A working demonstration depends on accounts, credentials and services outside the project: GitHub, Jenkins, SonarQube, Docker Hub and Kubernetes. These were connected for a local demonstration. SonarQube needs a webhook back to Jenkins so the quality-gate stage can finish, and the initial Kubernetes Deployment must exist before Jenkins can update its image. The local Jenkins agent's Kubernetes credential expires and needs renewal for future runs.
 
 The local Docker build was initially blocked when pip could not verify the package-index certificate from inside the build container. The Windows host could download packages using its trusted certificate store, so the build was retried with a temporary bundle of public Windows CA certificates passed through a Docker BuildKit secret. Both images then built successfully without disabling certificate validation or copying the bundle into an image. Docker Desktop Kubernetes was subsequently enabled, and a local namespace was used instead of the existing workplace cluster.
 
@@ -38,7 +38,7 @@ SQLite is convenient for a small local example but creates a limitation in Kuber
 
 ## Outcomes and submission evidence
 
-The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. Both Docker images built using the trusted CA bundle; the test suite also passed inside the test image, and the runtime container responded to HTTP health and program requests. These local results do not replace the required Jenkins or cluster evidence.
+The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. Both Docker images built using the trusted CA bundle; the test suite also passed inside the test image, and the runtime container responded to HTTP health and program requests.
 
 The repository is public at https://github.com/himanshujaidka/devops-assignment-2. The Flask image is published at https://hub.docker.com/r/himanshujaidka1/devops-assignment-2 with tags `1.0.0`, `1.1.0`, and `1.2.0`. These tags share identical Flask runtime files and do not represent images of the historical Tkinter applications.
 
@@ -46,15 +46,15 @@ An actual local SonarQube scan passed its quality gate with zero reported bugs, 
 
 The application was deployed in the `aceest-2025tm93219` namespace of local Docker Desktop Kubernetes. Health checks passed after a rolling update and rollback, and after switching the Service between blue and green and back to blue. Using a locally installed NGINX Ingress controller, 100 read-only canary requests produced 91 stable and 9 candidate upstream selections; an A/B request with the `B` header reached the candidate while a request without it reached stable. A read-only shadow request appeared in the shadow backend log while the client received the stable response. The examples use identical application code, and these checks do not prove uninterrupted service throughout the transitions. The local port-forward and SonarQube dashboard are not reviewer-accessible public endpoints.
 
-A separate, local Jenkins job named `aceest-local-tests` successfully checked out commit `cd6c73f945b44803edddf9f79784872d413bef92` and ran all nine pytest tests. Its local build page is http://localhost:18081/job/aceest-local-tests/1/. This job runs tests only: it is not a successful execution of the repository's complete Jenkinsfile and does not demonstrate automated SonarQube, image publishing or deployment. The local Jenkins page is not reachable by an external reviewer.
+The full Jenkinsfile succeeded in the local multibranch job [build 2](http://localhost:18081/job/aceest-multibranch/job/main/2/) for commit `3ff764b3d87a11968f02a037f14a2f7a39aae129`. Jenkins recorded 18 passing test executions (the same nine tests on the agent and in Docker), received an OK SonarQube quality gate, pushed image tag `2`, and completed the rolling deployment. The local Jenkins page is not reachable by an external reviewer.
 
 The following evidence must be added after the remaining external services are configured and exercised:
 
 | Requirement | Evidence to provide |
 |---|---|
-| Jenkins | Successful recent full-pipeline build URL and test results |
+| Jenkins | Reviewer-accessible evidence of the successful full-pipeline run and test results |
 | SonarQube | Reviewer-accessible dashboard or exported report, including quality-gate status |
 | Docker Hub | Images of other application versions, if required by the instructor |
 | Kubernetes | Reviewer-reachable endpoint and independently accessible evidence for each strategy |
 
-No successful full Jenkins pipeline or reviewer-accessible cluster endpoint is claimed until it is actually available. The historical Tkinter files are source snapshots, not container images for every application version.
+The full pipeline ran locally, but no reviewer-accessible cluster endpoint is available. The historical Tkinter files are source snapshots, not container images for every application version.
