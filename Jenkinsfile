@@ -27,7 +27,7 @@ pipeline {
                     pip install --upgrade pip
                     pip install -r requirements-dev.txt
                     python -m compileall -q ACEest_Fitness.py tests
-                    pytest --junitxml=pytest-report.xml
+                    python -m pytest --junitxml=pytest-report.xml
                 '''
             }
             post {
