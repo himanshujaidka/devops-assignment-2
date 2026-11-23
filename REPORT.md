@@ -46,11 +46,13 @@ An actual local SonarQube scan passed its quality gate with zero reported bugs, 
 
 The application was deployed in a local Docker Desktop Kubernetes namespace. Health checks passed after a rolling update and rollback, and after switching the Service between blue and green and back to blue. The examples use identical application code, and the checks do not prove uninterrupted service throughout the transitions. The local port-forward and SonarQube dashboard are not reviewer-accessible public endpoints. Canary, shadow and A/B routing have not been verified in the cluster.
 
+A separate, local Jenkins job named `aceest-local-tests` successfully checked out commit `cd6c73f945b44803edddf9f79784872d413bef92` and ran all nine pytest tests. Its local build page is http://localhost:18081/job/aceest-local-tests/1/. This job runs tests only: it is not a successful execution of the repository's complete Jenkinsfile and does not demonstrate automated SonarQube, image publishing or deployment. The local Jenkins page is not reachable by an external reviewer.
+
 The following evidence must be added after the remaining external services are configured and exercised:
 
 | Requirement | Evidence to provide |
 |---|---|
-| Jenkins | Successful recent build URL and test results |
+| Jenkins | Successful recent full-pipeline build URL and test results |
 | SonarQube | Reviewer-accessible dashboard or exported report, including quality-gate status |
 | Docker Hub | Images of other application versions, if required by the instructor |
 | Kubernetes | Reviewer-reachable endpoint and evidence for canary, shadow and A/B strategies |

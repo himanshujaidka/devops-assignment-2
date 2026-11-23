@@ -80,9 +80,9 @@ GitHub is the source repository and Jenkins polls it for changes. Jenkins create
 The checked-in configuration is not evidence that external services ran. After completing the setup, collect:
 
 * The accessible GitHub repository URL and commits/tags.
-* A recent successful Jenkins build URL and test results.
+* A recent successful **full-pipeline** Jenkins build URL and test results. A separate local test-only job succeeded at `http://localhost:18081/job/aceest-local-tests/1/`; it does not demonstrate the complete Jenkinsfile.
 * Your [Docker Hub repository](https://hub.docker.com/r/himanshujaidka1/devops-assignment-2) and the image tags actually built and pushed. Tags `1.0.0`, `1.1.0`, and `1.2.0` have identical Flask runtime source; the historical Tkinter files are archived source snapshots, **not** prebuilt Flask images.
-* A SonarQube dashboard URL or exported/printed report showing the project, analysis date, issues and quality-gate status.
+* A SonarQube dashboard URL or exported/printed report showing the project, analysis date, issues and quality-gate status. See `SONARQUBE-REPORT.md` for the actual local analysis and its limitations.
 * A reviewer-reachable cluster endpoint and evidence of each deployment strategy and rollback. Record which image tags were used.
 
 Do not fabricate links, screenshots, analysis results, image versions or live endpoints.
