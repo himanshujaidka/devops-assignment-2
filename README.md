@@ -38,7 +38,7 @@ The script exports public certificates, not private keys, from Windows Root and 
 ## Set up the Jenkins pipeline
 
 1. Push this local Git repository and its tags to your own GitHub repository after checking that you are allowed to publish the historical source files. Share the public repository URL, or invite the reviewer if private access is permitted.
-2. Set up a Linux Jenkins agent with Python 3, Docker, `kubectl`, and `sonar-scanner`. Use a multibranch Pipeline job pointing at the repository; the `branch 'main'` conditions require multibranch branch metadata. Jenkins polls for changes every five minutes; a GitHub webhook can also trigger builds.
+2. Set up a Linux Jenkins agent labelled `aceest` with Python 3, Docker, `kubectl`, and `sonar-scanner`. Use a multibranch Pipeline job pointing at the repository; the `branch 'main'` conditions require multibranch branch metadata. Jenkins polls for changes every five minutes; a GitHub webhook can also trigger builds.
 3. Configure the SonarQube Jenkins plugin and an installation named `SonarQube`. Add the SonarQube webhook `https://<jenkins-url>/sonarqube-webhook/`, including the trailing slash, so `waitForQualityGate` can receive the result. Set a quality gate in SonarQube.
 4. Create Jenkins username/password credentials with ID `dockerhub-creds` using the `himanshujaidka1` Docker Hub username and an access token. The pipeline publishes to `himanshujaidka1/devops-assignment-2`. If the Linux agent also needs a custom CA bundle, place an approved PEM bundle on that agent and set the agent environment variable `PIP_CA_CERT` to its absolute path. Jenkins passes it as a build secret to both images and uses it for host-side pip; the agent needs Docker BuildKit.
 5. Configure the Jenkins agent to access the intended assignment cluster. Apply the base manifests before running the deployment stage; the base deployment uses the published `1.2.0` image. Do not use a workplace cluster without authorization.
@@ -56,6 +56,14 @@ kubectl rollout status deployment/aceest
 ```
 
 For Minikube, enable the ingress add-on and map `aceest.local` to the Minikube IP in the local hosts file. `http://aceest.local` is only a local demonstration address, not a publicly accessible submission endpoint. Use a cluster and DNS/Ingress address reachable by the reviewer if the assignment requires a remote endpoint.
+
+The local demonstration used Docker Desktop's `docker-desktop` context, namespace `aceest-2025tm93219`, and an NGINX Ingress controller with an internal ClusterIP service. To temporarily access that controller from the same computer, run the following in a PowerShell window and keep it open:
+
+```powershell
+kubectl --context docker-desktop -n ingress-nginx port-forward --address 127.0.0.1 service/ingress-nginx-controller 15052:80
+```
+
+In another PowerShell window, check the route with `curl.exe -H "Host: aceest.local" http://127.0.0.1:15052/health`. This port-forward stops when its command or session ends. It does not expose a reviewer-accessible endpoint. Installing the ingress controller and its cluster-wide resources is a separate cluster-administration step; it is not created by this repository's base manifests.
 
 The SQLite database is stored in each container's writable layer. It is lost when that container is replaced, and pods do not share their records; rolling, blue-green, canary, A/B and shadow routes can therefore show different or missing clients. Use sample data only. Reliable shared state and a truly zero-downtime stateful rollout require an external shared database and suitable authentication, neither of which is included.
 
@@ -81,7 +89,7 @@ The checked-in configuration is not evidence that external services ran. After c
 
 * The accessible GitHub repository URL and commits/tags.
 * A recent successful **full-pipeline** Jenkins build URL and test results. A separate local test-only job succeeded at `http://localhost:18081/job/aceest-local-tests/1/`; it does not demonstrate the complete Jenkinsfile.
-* Your [Docker Hub repository](https://hub.docker.com/r/himanshujaidka1/devops-assignment-2) and the image tags actually built and pushed. Tags `1.0.0`, `1.1.0`, and `1.2.0` have identical Flask runtime source; the historical Tkinter files are archived source snapshots, **not** prebuilt Flask images.
+* Your [Docker Hub repository](https://hub.docker.com/r/himanshujaidka1/devops-assignment-2) and the image tags actually built and pushed. Tags `1.0.0`, `1.1.0`, and `1.2.0` have identical Flask runtime source; the historical Tkinter files are archived source snapshots, **not** prebuilt Flask images. The separate `infra-` tags are copies of official NGINX Ingress infrastructure images for the local demonstration, not application releases.
 * A SonarQube dashboard URL or exported/printed report showing the project, analysis date, issues and quality-gate status. See `SONARQUBE-REPORT.md` for the actual local analysis and its limitations.
 * A reviewer-reachable cluster endpoint and evidence of each deployment strategy and rollback. Record which image tags were used.
 

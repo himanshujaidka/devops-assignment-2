@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'aceest' }
 
     options {
         disableConcurrentBuilds()
@@ -47,9 +47,15 @@ pipeline {
                         set -- --secret "id=pip_ca,src=$PIP_CA_CERT"
                     fi
                     docker build "$@" -f Dockerfile.test -t aceest-fitness:test .
-                    docker run --rm \
-                      -v "$WORKSPACE/test-results:/test-results" \
-                      aceest-fitness:test
+                    container_id=$(docker create aceest-fitness:test)
+                    trap 'docker rm -f "$container_id" >/dev/null' EXIT
+                    status=0
+                    docker start -a "$container_id" || status=$?
+                    if ! docker cp "$container_id:/test-results/junit.xml" test-results/junit.xml; then
+                        echo "Could not retrieve container test results."
+                        exit 1
+                    fi
+                    exit "$status"
                 '''
             }
             post {
