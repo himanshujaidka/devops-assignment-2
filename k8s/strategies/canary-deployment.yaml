@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: aceest
-          image: YOUR_DOCKERHUB_USER/aceest-fitness:candidate
+          image: himanshujaidka1/devops-assignment-2:1.1.0
           ports:
             - name: http
               containerPort: 5000

@@ -10,7 +10,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = 'YOUR_DOCKERHUB_USER/aceest-fitness'
+        IMAGE_NAME = 'himanshujaidka1/devops-assignment-2'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 

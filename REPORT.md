@@ -32,7 +32,7 @@ Tests need to be repeatable and should not change a user's existing data. The Fl
 
 The infrastructure is another practical challenge. A working demonstration depends on accounts, credentials and services outside the project: GitHub, Jenkins, SonarQube, Docker Hub and Kubernetes. The repository contains their configuration, but these services still need to be connected and run by the project owner. In particular, SonarQube needs a webhook back to Jenkins so the quality-gate stage can finish, and the initial Kubernetes Deployment must exist before Jenkins can update its image.
 
-The local Docker build was initially blocked when pip could not verify the package-index certificate from inside the build container. The Windows host could download packages using its trusted certificate store, so the build was retried with a temporary bundle of public Windows CA certificates passed through a Docker BuildKit secret. Both images then built successfully without disabling certificate validation or copying the bundle into an image. The configured Kubernetes API was unreachable, and Docker Desktop Kubernetes was still disabled, so a cluster deployment was not attempted.
+The local Docker build was initially blocked when pip could not verify the package-index certificate from inside the build container. The Windows host could download packages using its trusted certificate store, so the build was retried with a temporary bundle of public Windows CA certificates passed through a Docker BuildKit secret. Both images then built successfully without disabling certificate validation or copying the bundle into an image. Docker Desktop Kubernetes was subsequently enabled, and a local namespace was used instead of the existing workplace cluster.
 
 SQLite is convenient for a small local example but creates a limitation in Kubernetes. Each container has its own writable layer: data can disappear on replacement, and different pods can return different records during a rollout. The examples should therefore use sample data only. A shared database, authentication and persistent storage would be needed before treating this as a reliable multi-user service or claiming a zero-downtime stateful deployment.
 
@@ -40,14 +40,19 @@ SQLite is convenient for a small local example but creates a limitation in Kuber
 
 The project now contains the Flask application, historical source files, automated tests, Jenkinsfile, Dockerfiles, SonarQube configuration and Kubernetes examples. Locally, all **9 pytest tests passed**, and Python compilation completed successfully. Both Docker images built using the trusted CA bundle; the test suite also passed inside the test image, and the runtime container responded to HTTP health and program requests. These local results do not replace the required Jenkins or cluster evidence.
 
-The following evidence must be added after the external services are configured and exercised:
+The repository is public at https://github.com/himanshujaidka/devops-assignment-2. The Flask image is published at https://hub.docker.com/r/himanshujaidka1/devops-assignment-2 with tags `1.0.0`, `1.1.0`, and `1.2.0`. These tags share identical Flask runtime files and do not represent images of the historical Tkinter applications.
+
+An actual local SonarQube scan passed its quality gate with zero reported bugs, zero vulnerabilities, one code smell and one security hotspot requiring review. No coverage report was imported, so the dashboard reports 0.0% coverage; this is not a measurement of test coverage. See `SONARQUBE-REPORT.md` for the scope and limitations.
+
+The application was deployed in a local Docker Desktop Kubernetes namespace. Health checks passed after a rolling update and rollback, and after switching the Service between blue and green and back to blue. The examples use identical application code, and the checks do not prove uninterrupted service throughout the transitions. The local port-forward and SonarQube dashboard are not reviewer-accessible public endpoints. Canary, shadow and A/B routing have not been verified in the cluster.
+
+The following evidence must be added after the remaining external services are configured and exercised:
 
 | Requirement | Evidence to provide |
 |---|---|
-| GitHub | Accessible repository URL and relevant commits/tags |
 | Jenkins | Successful recent build URL and test results |
-| SonarQube | Actual analysis report or dashboard URL, including quality-gate status |
-| Docker Hub | Owned repository URL and the image tags actually built and pushed |
-| Kubernetes | Reviewer-reachable endpoint and evidence for each requested strategy and rollback |
+| SonarQube | Reviewer-accessible dashboard or exported report, including quality-gate status |
+| Docker Hub | Images of other application versions, if required by the instructor |
+| Kubernetes | Reviewer-reachable endpoint and evidence for canary, shadow and A/B strategies |
 
-No remote build, SonarQube report, published image or running cluster endpoint is claimed in this report until it is actually available. The historical Tkinter files are source snapshots, not container images for every application version.
+No successful full Jenkins pipeline or reviewer-accessible cluster endpoint is claimed until it is actually available. The historical Tkinter files are source snapshots, not container images for every application version.

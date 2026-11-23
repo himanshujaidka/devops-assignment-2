@@ -40,15 +40,15 @@ The script exports public certificates, not private keys, from Windows Root and 
 1. Push this local Git repository and its tags to your own GitHub repository after checking that you are allowed to publish the historical source files. Share the public repository URL, or invite the reviewer if private access is permitted.
 2. Set up a Linux Jenkins agent with Python 3, Docker, `kubectl`, and `sonar-scanner`. Use a multibranch Pipeline job pointing at the repository; the `branch 'main'` conditions require multibranch branch metadata. Jenkins polls for changes every five minutes; a GitHub webhook can also trigger builds.
 3. Configure the SonarQube Jenkins plugin and an installation named `SonarQube`. Add the SonarQube webhook `https://<jenkins-url>/sonarqube-webhook/`, including the trailing slash, so `waitForQualityGate` can receive the result. Set a quality gate in SonarQube.
-4. Create Jenkins username/password credentials with ID `dockerhub-creds` using your Docker Hub username and access token. Replace `YOUR_DOCKERHUB_USER` in the Jenkinsfile and Kubernetes manifests with that username. The account and image must be accessible to your cluster. If the Linux agent also needs a custom CA bundle, place an approved PEM bundle on that agent and set the agent environment variable `PIP_CA_CERT` to its absolute path. Jenkins passes it as a build secret to both images and uses it for host-side pip; the agent needs Docker BuildKit.
-5. Configure the Jenkins agent to access the intended assignment cluster. Build and push an initial image, update `k8s/base/deployment.yaml` to use that real tag, and apply the base manifests before running the deployment stage. Do not use a workplace cluster without authorization.
+4. Create Jenkins username/password credentials with ID `dockerhub-creds` using the `himanshujaidka1` Docker Hub username and an access token. The pipeline publishes to `himanshujaidka1/devops-assignment-2`. If the Linux agent also needs a custom CA bundle, place an approved PEM bundle on that agent and set the agent environment variable `PIP_CA_CERT` to its absolute path. Jenkins passes it as a build secret to both images and uses it for host-side pip; the agent needs Docker BuildKit.
+5. Configure the Jenkins agent to access the intended assignment cluster. Apply the base manifests before running the deployment stage; the base deployment uses the published `1.2.0` image. Do not use a workplace cluster without authorization.
 6. Run a build on `main`. Jenkins runs tests both locally and inside the test container, scans the code, waits for the quality gate, builds and pushes an image tagged with the build number, then deploys it. A failed rollout triggers an automatic rollback and fails the build. Keep the successful build URL, test results, image tag, and SonarQube results for your submission.
 
 The pipeline uses Linux shell steps; a Windows-only Jenkins agent needs equivalent adaptations. For Jenkins to receive GitHub or SonarQube webhooks, its webhook endpoints must be reachable by those services.
 
 ## Kubernetes deployment
 
-The base manifests use a rolling update and expect an NGINX Ingress controller. Replace the image placeholder, then apply:
+The base manifests use a rolling update and expect an NGINX Ingress controller. Set the intended Kubernetes context explicitly, then apply:
 
 ```powershell
 kubectl apply -f k8s/base
@@ -61,7 +61,7 @@ The SQLite database is stored in each container's writable layer. It is lost whe
 
 ### Release strategies
 
-Examples are in `k8s/strategies`; they are selectable demonstrations, not applied together. Replace `stable` and `candidate` image references with image tags that actually exist in your Docker Hub repository before applying them.
+Examples are in `k8s/strategies`; they are selectable demonstrations, not applied together. The example `1.0.0` and `1.1.0` tags are published Flask snapshots with identical runtime source, so they demonstrate routing rather than a visible application change. Use distinct validated builds if demonstrating an actual version change.
 
 * **Rolling update:** `k8s/base/deployment.yaml` sets `maxUnavailable: 0` and `maxSurge: 1`. Roll back with `kubectl rollout undo deployment/aceest`.
 * **Blue-green:** apply the base Ingress and `blue-green.yaml` (use its `aceest` Service instead of the base Service), then wait until both Deployments are ready. Test green directly with `kubectl port-forward deployment/aceest-green 8080:5000` and visit `http://localhost:8080/health`. Switch traffic using `kubectl set selector service/aceest app=aceest,track=green`; roll back with `kubectl set selector service/aceest app=aceest,track=blue`.
@@ -81,7 +81,7 @@ The checked-in configuration is not evidence that external services ran. After c
 
 * The accessible GitHub repository URL and commits/tags.
 * A recent successful Jenkins build URL and test results.
-* Your Docker Hub repository URL and the image tags actually built and pushed. The historical Tkinter files are archived source snapshots, **not** prebuilt Flask images.
+* Your [Docker Hub repository](https://hub.docker.com/r/himanshujaidka1/devops-assignment-2) and the image tags actually built and pushed. Tags `1.0.0`, `1.1.0`, and `1.2.0` have identical Flask runtime source; the historical Tkinter files are archived source snapshots, **not** prebuilt Flask images.
 * A SonarQube dashboard URL or exported/printed report showing the project, analysis date, issues and quality-gate status.
 * A reviewer-reachable cluster endpoint and evidence of each deployment strategy and rollback. Record which image tags were used.
 
